@@ -2,6 +2,7 @@ import streamlit as st
 from groq import Groq
 import json
 import re
+import os
 
 # ── Page Config ───────────────────────────────────────────────────────
 st.set_page_config(
@@ -10,14 +11,19 @@ st.set_page_config(
     layout="centered"
 )
 
-# ── Load API Key ──────────────────────────────────────────────────────
-try:
-    API_KEY = st.secrets["GROQ_API_KEY"]
-    client  = Groq(api_key=API_KEY)
-except Exception:
-    st.error("⚠️ API key not configured.")
-    st.info("Add to Streamlit Secrets:\n\n`GROQ_API_KEY = \"gsk_your_key_here\"`")
+# ── Load API Key (works on Render) ────────────────────────────────────
+api_key = os.environ.get("GROQ_API_KEY")
+if not api_key:
+    try:
+        api_key = st.secrets["GROQ_API_KEY"]
+    except:
+        pass
+
+if not api_key:
+    st.error("⚠️ GROQ_API_KEY missing. Add it in Render → Environment Variables.")
     st.stop()
+
+client = Groq(api_key=api_key)
 
 # ── Custom CSS ────────────────────────────────────────────────────────
 st.markdown("""
@@ -223,7 +229,6 @@ MESSAGE TO ANALYZE:
     cleaned = re.sub(r'```json|```', '', raw).strip()
     result  = json.loads(cleaned)
 
-    # Apply threshold override
     if result.get("confidence", 0) >= threshold and result.get("verdict") == "SUSPICIOUS":
         result["verdict"] = "SPAM"
 
@@ -292,7 +297,6 @@ if analyze_btn:
         }
         card_cls, verdict_cls, verdict_label, bar_color = v_map.get(verdict, v_map["SUSPICIOUS"])
 
-        # Save history
         st.session_state.history.insert(0, {
             "verdict": verdict, "confidence": confidence,
             "category": category,
@@ -301,7 +305,6 @@ if analyze_btn:
         if len(st.session_state.history) > 10:
             st.session_state.history = st.session_state.history[:10]
 
-        # ── Result card ───────────────────────────────────────────────
         st.markdown(f"""
         <div class="result-card {card_cls}">
             <div class="result-verdict {verdict_cls}">{verdict_label}</div>
@@ -326,7 +329,6 @@ if analyze_btn:
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Stats row
         n_spam  = sum(1 for h in st.session_state.history if h["verdict"] == "SPAM")
         n_sus   = sum(1 for h in st.session_state.history if h["verdict"] == "SUSPICIOUS")
         n_clean = sum(1 for h in st.session_state.history if h["verdict"] == "CLEAN")
