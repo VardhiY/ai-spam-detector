@@ -1,590 +1,320 @@
 import streamlit as st
 from groq import Groq
-import json
-import re
-import os
-import base64
+import json, re, os, base64
+import streamlit.components.v1 as components
 
-# ── Page Config ───────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="AI Spam Detector",
-    page_icon="🛡️",
-    layout="centered"
-)
+st.set_page_config(page_title="SpamShield AI", page_icon="🛡️", layout="centered")
 
-# ── Load API Key ──────────────────────────────────────────────────────
 api_key = os.environ.get("GROQ_API_KEY")
 if not api_key:
-    try:
-        api_key = st.secrets["GROQ_API_KEY"]
-    except:
-        pass
+    try: api_key = st.secrets["GROQ_API_KEY"]
+    except: pass
 if not api_key:
-    st.error("⚠️ GROQ_API_KEY missing. Add it in Render → Environment Variables.")
+    st.error("⚠️ GROQ_API_KEY missing.")
     st.stop()
-
 client = Groq(api_key=api_key)
 
-# ══════════════════════════════════════════════════════════════════════
-# CSS — Royal Blue + Crisp White Light Theme
-# ══════════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500&display=swap');
 
-/* ── RESET & BASE ── */
-*, *::before, *::after { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-
-/* ── ROYAL BLUE CSS VARIABLES ── */
 :root {
-  --rb-primary:   #1a3fa8;
-  --rb-bright:    #2563eb;
-  --rb-light:     #3b82f6;
-  --rb-pale:      #dbeafe;
-  --rb-palest:    #eff6ff;
-  --rb-white:     #ffffff;
-  --rb-text:      #0f172a;
-  --rb-sub:       #475569;
-  --rb-muted:     #94a3b8;
-  --rb-border:    rgba(26,63,168,0.14);
-  --rb-borderm:   rgba(26,63,168,0.28);
-  --rb-shadow:    rgba(26,63,168,0.12);
-  --rb-shadowm:   rgba(26,63,168,0.22);
+  --P:  #1a3fa8;
+  --PB: #2563eb;
+  --PA: #dbeafe;
+  --PS: #eff6ff;
+  --TX: #0f172a;
+  --SB: #334155;
+  --MT: #64748b;
+  --BD: rgba(26,63,168,0.15);
+  --BM: rgba(26,63,168,0.30);
+  --SH: rgba(26,63,168,0.10);
+  --SM: rgba(26,63,168,0.20);
 }
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin:0; padding:0; }
 
-/* ── APP BACKGROUND — white + royal blue radial glows ── */
 .stApp {
     background:
-        radial-gradient(ellipse 1000px 700px at 0% 0%,   rgba(219,234,254,0.75) 0%, transparent 55%),
-        radial-gradient(ellipse 800px 600px at 100% 5%,  rgba(191,219,254,0.55) 0%, transparent 55%),
-        radial-gradient(ellipse 700px 500px at 85% 95%,  rgba(219,234,254,0.45) 0%, transparent 55%),
-        #f8faff !important;
+        radial-gradient(ellipse 1100px 700px at 0% 0%,   rgba(219,234,254,.70) 0%, transparent 55%),
+        radial-gradient(ellipse  800px 600px at 100% 0%,  rgba(191,219,254,.50) 0%, transparent 55%),
+        radial-gradient(ellipse  700px 500px at 80% 100%, rgba(219,234,254,.40) 0%, transparent 55%),
+        #f0f6ff !important;
     font-family: 'Plus Jakarta Sans', sans-serif !important;
-    color: var(--rb-text) !important;
-    min-height: 100vh;
+    color: var(--TX) !important;
 }
-
-/* Fine dot-grid overlay */
 .stApp::before {
-    content: '';
-    position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    background-image: radial-gradient(rgba(26,63,168,0.10) 1px, transparent 1px);
+    content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image: radial-gradient(rgba(26,63,168,.09) 1px, transparent 1px);
     background-size: 24px 24px;
 }
-
 #MainMenu, footer, header, .stDeployButton,
-[data-testid="stToolbar"], [data-testid="stDecoration"],
-[data-testid="stStatusWidget"] { display: none !important; visibility: hidden !important; }
-
+[data-testid="stToolbar"],[data-testid="stDecoration"],[data-testid="stStatusWidget"] {
+    display:none !important;
+}
 .block-container {
-    position: relative; z-index: 1;
-    padding-top: 0 !important;
-    max-width: 760px !important;
-    padding-bottom: 3rem !important;
+    position:relative; z-index:1;
+    padding-top:.5rem !important;
+    max-width:820px !important;
+    padding-bottom:3rem !important;
 }
 
-/* ── NAVBAR ── */
-.sd-nav {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 1.4rem 0 0;
-    margin-bottom: 0;
-}
-.sd-nav-logo { display: flex; align-items: center; gap: 11px; }
-.sd-nav-icon {
-    width: 40px; height: 40px;
-    background: linear-gradient(145deg, var(--rb-primary), var(--rb-bright));
-    border-radius: 11px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.15rem;
-    box-shadow: 0 4px 16px var(--rb-shadowm), 0 1px 0 rgba(255,255,255,0.3) inset;
-}
-.sd-nav-name {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 1.08rem; font-weight: 900;
-    color: var(--rb-text); letter-spacing: -0.5px;
-}
-.sd-nav-name span { color: var(--rb-primary); }
-.sd-nav-center {
-    background: rgba(255,255,255,0.8);
-    border: 1.5px solid var(--rb-border);
-    border-radius: 100px; padding: 5px 18px;
-    font-family: 'Fira Code', monospace;
-    font-size: 0.66rem; font-weight: 500; color: var(--rb-sub);
-    letter-spacing: 0.12em; text-transform: uppercase;
-    backdrop-filter: blur(8px);
-}
-.sd-nav-status {
-    display: flex; align-items: center; gap: 7px;
-    font-size: 0.82rem; font-weight: 700; color: var(--rb-text);
-}
-.sd-status-dot {
-    width: 8px; height: 8px; border-radius: 50%; background: #10b981;
-    box-shadow: 0 0 0 3px rgba(16,185,129,0.22);
-    animation: sdPulse 2.4s ease-in-out infinite;
-}
-@keyframes sdPulse {
-    0%,100% { box-shadow: 0 0 0 3px rgba(16,185,129,0.22); }
-    50%      { box-shadow: 0 0 0 7px rgba(16,185,129,0.06); }
-}
-
-/* ── HERO SECTION ── */
-.sd-hero { text-align: center; padding: 3.8rem 0 3rem; }
-.sd-hero-tag {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: rgba(255,255,255,0.9);
-    border: 1.5px solid var(--rb-borderm);
-    border-radius: 100px; padding: 7px 20px;
-    font-size: 0.8rem; font-weight: 700; color: var(--rb-primary);
-    margin-bottom: 1.8rem;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 2px 16px var(--rb-shadow);
-}
-.sd-hero-tag-dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--rb-primary);
-    box-shadow: 0 0 0 3px rgba(26,63,168,0.22);
-    animation: sdPulse2 2s ease-in-out infinite;
-}
-@keyframes sdPulse2 {
-    0%,100% { box-shadow: 0 0 0 3px rgba(26,63,168,0.22); }
-    50%      { box-shadow: 0 0 0 7px rgba(26,63,168,0.06); }
-}
-.sd-h1 {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: clamp(2.8rem, 5.5vw, 4.2rem);
-    font-weight: 900; line-height: 1.0; letter-spacing: -2px;
-    color: var(--rb-text); margin: 0 0 0.1rem;
-}
-.sd-h1-accent {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: clamp(2.8rem, 5.5vw, 4.2rem);
-    font-weight: 900; line-height: 1.1; letter-spacing: -2px;
-    background: linear-gradient(135deg, var(--rb-primary) 0%, var(--rb-bright) 50%, #0ea5e9 100%);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text; display: block; margin-bottom: 1.4rem;
-}
-.sd-hero-sub {
-    font-size: 1.05rem; color: var(--rb-sub); font-weight: 500;
-    max-width: 450px; margin: 0 auto 2.2rem; line-height: 1.75;
-}
-.sd-badge-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-.sd-badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: rgba(255,255,255,0.9);
-    border: 1.5px solid var(--rb-border);
-    border-radius: 100px; padding: 7px 16px;
-    font-size: 0.78rem; font-weight: 700;
-    backdrop-filter: blur(8px);
-    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-}
-.sd-badge.spam  { color:#dc2626; border-color:rgba(220,38,38,0.22);  background:rgba(255,241,241,0.9); }
-.sd-badge.warn  { color:#d97706; border-color:rgba(217,119,6,0.22);  background:rgba(255,253,235,0.9); }
-.sd-badge.clean { color:#059669; border-color:rgba(5,150,105,0.22);  background:rgba(236,253,245,0.9); }
-
-/* ── GLASS INPUT CARD ── */
-.sd-input-card {
-    background: rgba(255,255,255,0.88);
-    border: 1.5px solid var(--rb-border);
-    border-top: 3px solid var(--rb-primary);
-    border-radius: 20px;
-    padding: 2rem 2rem 1.6rem;
-    backdrop-filter: blur(20px);
-    box-shadow:
-        0 8px 40px var(--rb-shadow),
-        0 1px 0 rgba(255,255,255,1) inset;
-    margin-bottom: 0;
-}
-.sd-section-label {
-    font-family: 'Fira Code', monospace;
-    font-size: 0.66rem; font-weight: 500; letter-spacing: 0.14em;
-    text-transform: uppercase; color: var(--rb-muted); margin-bottom: 0.8rem;
-}
-
-/* ── TEXTAREA ── */
-div[data-testid="stTextArea"] textarea {
-    background: #ffffff !important;
-    border: 1.5px solid rgba(26,63,168,0.2) !important;
-    border-radius: 12px !important;
-    color: var(--rb-text) !important;
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
-    font-size: 0.95rem !important; line-height: 1.75 !important;
-    padding: 1rem 1.1rem !important; resize: none !important;
-    box-shadow: 0 2px 6px rgba(26,63,168,0.05) !important;
-    transition: all 0.18s !important;
-    caret-color: var(--rb-primary) !important;
-}
-div[data-testid="stTextArea"] textarea:focus {
-    border-color: var(--rb-primary) !important;
-    box-shadow: 0 0 0 4px rgba(26,63,168,0.10), 0 2px 6px rgba(26,63,168,0.08) !important;
-    outline: none !important;
-}
-div[data-testid="stTextArea"] textarea::placeholder { color: #cbd5e1 !important; }
-div[data-testid="stTextArea"] label { display: none !important; }
-
-/* ── SELECTBOX ── */
-div[data-testid="stSelectbox"] label { display: none !important; }
-div[data-baseweb="select"] > div {
-    background: #ffffff !important;
-    border: 1.5px solid rgba(26,63,168,0.2) !important;
-    border-radius: 11px !important; color: var(--rb-text) !important;
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
-    font-size: 0.88rem !important; font-weight: 500 !important;
-}
-div[data-baseweb="select"] span { color: var(--rb-text) !important; }
-[data-baseweb="popover"] > div {
-    background: #ffffff !important;
-    border: 1.5px solid rgba(26,63,168,0.16) !important;
-    border-radius: 12px !important;
-    box-shadow: 0 12px 40px rgba(26,63,168,0.16) !important;
-}
-[role="option"] { color: var(--rb-text) !important; font-family: 'Plus Jakarta Sans', sans-serif !important; padding: 0.65rem 1rem !important; font-size: 0.88rem !important; }
-[role="option"]:hover { background: var(--rb-palest) !important; color: var(--rb-primary) !important; }
-
-/* ── ANALYZE BUTTON ── */
-.stButton > button {
-    width: 100% !important;
-    background: linear-gradient(135deg, var(--rb-primary) 0%, var(--rb-bright) 100%) !important;
-    color: #ffffff !important;
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
-    font-weight: 800 !important; font-size: 1rem !important;
-    border: none !important; border-radius: 12px !important;
-    padding: 0.92rem 2rem !important;
-    box-shadow: 0 4px 20px rgba(26,63,168,0.38), 0 1px 0 rgba(255,255,255,0.2) inset !important;
-    transition: all 0.18s !important; letter-spacing: 0.01em !important;
-    margin-top: 0.6rem !important;
-    border-bottom: 3px solid rgba(0,0,0,0.15) !important;
-}
-.stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 32px rgba(26,63,168,0.48) !important;
-    background: linear-gradient(135deg, #162e88 0%, #1d4ed8 100%) !important;
-}
-.stButton > button:active { transform: translateY(0) !important; border-bottom-width: 1px !important; }
-
-/* ── RESULT CARDS ── */
-.sd-result {
-    border-radius: 18px; padding: 1.8rem 2rem;
-    margin-top: 1.4rem; position: relative; overflow: hidden;
-    backdrop-filter: blur(20px);
-}
-.sd-result::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    border-radius: 18px 18px 0 0;
-}
-.sd-result.spam  { background: rgba(255,241,241,0.95); border: 1.5px solid rgba(220,38,38,0.2);  box-shadow: 0 8px 36px rgba(220,38,38,0.10); }
-.sd-result.warn  { background: rgba(255,253,235,0.95); border: 1.5px solid rgba(217,119,6,0.2);  box-shadow: 0 8px 36px rgba(217,119,6,0.10); }
-.sd-result.clean { background: rgba(236,253,245,0.95); border: 1.5px solid rgba(5,150,105,0.2);  box-shadow: 0 8px 36px rgba(5,150,105,0.10); }
-.sd-result.spam::before  { background: linear-gradient(90deg, transparent, #dc2626, transparent); }
-.sd-result.warn::before  { background: linear-gradient(90deg, transparent, #f59e0b, transparent); }
-.sd-result.clean::before { background: linear-gradient(90deg, transparent, #10b981, transparent); }
-
-.sd-verdict {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 2rem; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 4px;
-}
-.sd-verdict.spam  { color: #dc2626; }
-.sd-verdict.warn  { color: #d97706; }
-.sd-verdict.clean { color: #059669; }
-
-.sd-meta {
-    font-size: 0.76rem; color: var(--rb-muted); letter-spacing: 0.06em;
-    text-transform: uppercase; margin-bottom: 1rem; font-weight: 600;
-}
-.sd-conf-track {
-    height: 7px; background: rgba(0,0,0,0.07);
-    border-radius: 100px; overflow: hidden; margin-bottom: 1rem;
-}
-.sd-conf-fill { height: 100%; border-radius: 100px; }
-.sd-reason {
-    background: rgba(255,255,255,0.8); border-radius: 11px;
-    padding: 0.9rem 1.1rem; font-size: 0.9rem; line-height: 1.75;
-    color: #334155; margin-bottom: 1rem;
-    border: 1px solid rgba(0,0,0,0.07);
-}
-.sd-signals-title {
-    font-family: 'Fira Code', monospace;
-    font-size: 0.64rem; font-weight: 500; letter-spacing: 0.14em;
-    text-transform: uppercase; color: var(--rb-muted); margin-bottom: 8px;
-}
-.sd-tag {
-    display: inline-block; padding: 4px 13px; border-radius: 100px;
-    font-size: 0.74rem; font-weight: 700; margin: 3px 3px 3px 0;
-}
-.sd-tag.high   { background: rgba(220,38,38,0.10);  border: 1px solid rgba(220,38,38,0.28);  color: #dc2626; }
-.sd-tag.medium { background: rgba(217,119,6,0.10);  border: 1px solid rgba(217,119,6,0.28);  color: #d97706; }
-.sd-tag.low    { background: rgba(5,150,105,0.10);  border: 1px solid rgba(5,150,105,0.28);  color: #059669; }
-
-/* ── STATS ROW ── */
-.sd-stats {
-    display: grid; grid-template-columns: repeat(4,1fr);
-    gap: 12px; margin-top: 1.2rem;
-}
-.sd-stat {
-    background: rgba(255,255,255,0.9);
-    border: 1.5px solid var(--rb-border);
-    border-radius: 14px; padding: 1rem 0.75rem; text-align: center;
-    box-shadow: 0 2px 10px var(--rb-shadow);
-}
-.sd-stat-num {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 1.75rem; font-weight: 900; line-height: 1;
-}
-.sd-stat-lbl {
-    font-size: 0.64rem; color: var(--rb-muted); text-transform: uppercase;
-    letter-spacing: 0.1em; margin-top: 5px; font-weight: 600;
-}
-
-/* ── HISTORY ── */
-.sd-history-item {
-    background: rgba(255,255,255,0.85);
-    border: 1.5px solid var(--rb-border);
-    border-radius: 12px; padding: 0.8rem 1rem;
-    margin-bottom: 8px; display: flex; align-items: center; gap: 10px;
-    transition: all 0.15s;
-    box-shadow: 0 2px 8px var(--rb-shadow);
-}
-.sd-history-item:hover {
-    background: #ffffff; border-color: var(--rb-borderm);
-    box-shadow: 0 4px 16px var(--rb-shadowm); transform: translateX(3px);
-}
-.sd-hist-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-
-/* ── DIVIDER ── */
-.sd-divider {
-    height: 1px; margin: 1.8rem 0;
-    background: linear-gradient(90deg, transparent, rgba(26,63,168,0.18), transparent);
-}
+/* ── FORCE TEXT VISIBILITY ── */
+.stApp * { color: var(--TX) !important; }
+.hero-accent { color: transparent !important; }
+.hero-accent * { color: transparent !important; }
+.badge.spam  { color: #dc2626 !important; }
+.badge.warn  { color: #d97706 !important; }
+.badge.clean { color: #059669 !important; }
+.verdict.spam  { color: #dc2626 !important; }
+.verdict.warn  { color: #d97706 !important; }
+.verdict.clean { color: #059669 !important; }
+.sig.high   { color: #dc2626 !important; }
+.sig.medium { color: #d97706 !important; }
+.sig.low    { color: #059669 !important; }
 
 /* ── SIDEBAR ── */
 section[data-testid="stSidebar"] {
-    background: rgba(248,250,255,0.98) !important;
-    border-right: 1.5px solid rgba(26,63,168,0.10) !important;
+    background: #ffffff !important;
+    border-right: 2px solid var(--BD) !important;
+    box-shadow: 4px 0 24px var(--SH) !important;
 }
-section[data-testid="stSidebar"] .stMarkdown p { color: #334155 !important; font-size: 0.87rem !important; }
-section[data-testid="stSidebar"] h2 { color: var(--rb-text) !important; font-family: 'Plus Jakarta Sans',sans-serif !important; font-weight: 800 !important; font-size: 1rem !important; }
-.stCheckbox label { color: #334155 !important; font-size: 0.85rem !important; font-family: 'Plus Jakarta Sans',sans-serif !important; }
-.stSlider { accent-color: var(--rb-primary) !important; }
+section[data-testid="stSidebar"] * { color: var(--TX) !important; }
+section[data-testid="stSidebar"] h2 {
+    font-size:1rem !important; font-weight:800 !important;
+    color: var(--P) !important;
+}
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+    font-size:.86rem !important; font-weight:600 !important; color: var(--SB) !important;
+}
+section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
+    background: var(--PS) !important;
+    border: 1.5px solid var(--BD) !important;
+    border-radius:10px !important;
+}
+section[data-testid="stSidebar"] .stButton > button {
+    background: var(--PS) !important; color: var(--P) !important;
+    border: 1.5px solid var(--BD) !important; border-bottom: 1.5px solid var(--BD) !important;
+    border-radius:10px !important; font-size:.84rem !important; font-weight:700 !important;
+    box-shadow:none !important; transform:none !important; margin-top:0 !important;
+}
+section[data-testid="stSidebar"] .stButton > button:hover {
+    background: var(--PA) !important; border-color: var(--P) !important; transform:none !important;
+}
+[data-testid="stCheckbox"] label,
+[data-testid="stCheckbox"] p,
+[data-testid="stCheckbox"] span { color: var(--TX) !important; font-size:.86rem !important; }
 
-/* ── ALERTS ── */
-div[data-testid="stAlert"] {
-    background: rgba(255,255,255,0.9) !important;
-    border: 1.5px solid rgba(26,63,168,0.18) !important;
-    border-radius: 14px !important; color: var(--rb-text) !important;
+/* ── NAVBAR ── */
+.nav { display:flex; align-items:center; justify-content:space-between; padding:1.2rem 0 0; }
+.nav-logo { display:flex; align-items:center; gap:11px; }
+.nav-icon {
+    width:40px; height:40px;
+    background:linear-gradient(145deg,var(--P),var(--PB));
+    border-radius:11px; display:flex; align-items:center; justify-content:center;
+    font-size:1.15rem; box-shadow:0 4px 16px var(--SM);
 }
-.stSpinner > div { border-top-color: var(--rb-primary) !important; }
+.nav-name { font-size:1.1rem; font-weight:900; letter-spacing:-.5px; }
+.nav-name b { color: var(--P) !important; font-weight:900; }
+.nav-pill {
+    background:rgba(255,255,255,.9); border:1.5px solid var(--BD); border-radius:100px;
+    padding:5px 18px; font-family:'Fira Code',monospace; font-size:.66rem;
+    color: var(--MT) !important; letter-spacing:.12em; text-transform:uppercase;
+}
+.nav-status { display:flex; align-items:center; gap:7px; font-size:.82rem; font-weight:700; }
+.status-dot {
+    width:8px; height:8px; border-radius:50%; background:#10b981;
+    box-shadow:0 0 0 3px rgba(16,185,129,.22);
+    animation:pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse {
+    0%,100%{box-shadow:0 0 0 3px rgba(16,185,129,.22);}
+    50%{box-shadow:0 0 0 7px rgba(16,185,129,.05);}
+}
 
-/* ── SCROLLBAR ── */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(26,63,168,0.22); border-radius: 10px; }
+/* ── HERO ── */
+.hero { text-align:center; padding:3.2rem 0 2.6rem; }
+.hero-tag {
+    display:inline-flex; align-items:center; gap:8px;
+    background:rgba(255,255,255,.95); border:1.5px solid var(--BM);
+    border-radius:100px; padding:7px 20px;
+    font-size:.8rem; font-weight:700; color: var(--P) !important;
+    margin-bottom:1.6rem; box-shadow:0 2px 16px var(--SH);
+}
+.hero-tag-dot {
+    width:7px; height:7px; border-radius:50%; background:var(--P);
+    box-shadow:0 0 0 3px rgba(26,63,168,.2);
+    animation:pulse2 2s ease-in-out infinite;
+}
+@keyframes pulse2{0%,100%{box-shadow:0 0 0 3px rgba(26,63,168,.2);}50%{box-shadow:0 0 0 7px rgba(26,63,168,.05);}}
+.hero h1 {
+    font-size:clamp(2.6rem,5vw,3.8rem); font-weight:900; line-height:1;
+    letter-spacing:-2px; color: var(--TX) !important; margin:0 0 .1rem;
+}
+.hero-accent {
+    font-size:clamp(2.6rem,5vw,3.8rem); font-weight:900; line-height:1.1;
+    letter-spacing:-2px; display:block; margin-bottom:1.2rem;
+    background:linear-gradient(135deg,var(--P) 0%,var(--PB) 55%,#0ea5e9 100%);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+}
+.hero p { font-size:1rem; color: var(--SB) !important; font-weight:500; max-width:460px; margin:0 auto 1.8rem; line-height:1.75; }
+.badges { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+.badge {
+    display:inline-flex; align-items:center; gap:6px;
+    background:rgba(255,255,255,.92); border:1.5px solid var(--BD);
+    border-radius:100px; padding:7px 16px; font-size:.78rem; font-weight:700;
+    box-shadow:0 2px 10px rgba(0,0,0,.06);
+}
+.badge.spam  { border-color:rgba(220,38,38,.22);  background:rgba(255,241,241,.92); }
+.badge.warn  { border-color:rgba(217,119,6,.22);  background:rgba(255,253,235,.92); }
+.badge.clean { border-color:rgba(5,150,105,.22);  background:rgba(236,253,245,.92); }
 
-/* ── TABS ── */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 4px !important;
-    background: rgba(26,63,168,0.06) !important;
-    border-radius: 12px !important; padding: 4px !important;
-    margin-bottom: 1.2rem !important;
-    border: 1.5px solid rgba(26,63,168,0.10) !important;
+/* ── INPUT CARD ── */
+.input-card {
+    background:rgba(255,255,255,.94); border:1.5px solid var(--BD);
+    border-top:3px solid var(--P); border-radius:20px;
+    padding:1.6rem 1.8rem 1.4rem;
+    box-shadow:0 8px 40px var(--SH);
 }
-.stTabs [data-baseweb="tab"] {
-    border-radius: 9px !important;
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
-    font-weight: 700 !important; font-size: 0.88rem !important;
-    color: var(--rb-muted) !important; padding: 8px 22px !important;
-    background: transparent !important; border: none !important;
-    transition: all 0.18s !important;
+.input-row-label { display:flex; align-items:center; margin-bottom:.7rem; }
+.col-label {
+    flex:1; font-family:'Fira Code',monospace; font-size:.65rem; font-weight:600;
+    letter-spacing:.14em; text-transform:uppercase; color: var(--MT) !important;
 }
-.stTabs [aria-selected="true"] {
-    background: #ffffff !important; color: var(--rb-primary) !important;
-    box-shadow: 0 2px 10px rgba(26,63,168,0.16) !important;
+.or-pill {
+    flex-shrink:0;
+    background:linear-gradient(135deg,var(--P),var(--PB));
+    color:#fff !important; font-size:.65rem; font-weight:900;
+    letter-spacing:.12em; padding:5px 14px; border-radius:100px;
+    margin:0 14px; box-shadow:0 2px 10px var(--SM);
 }
-.stTabs [data-baseweb="tab-highlight"] { display: none !important; }
-.stTabs [data-baseweb="tab-border"]    { display: none !important; }
+
+/* ── TEXTAREA ── */
+div[data-testid="stTextArea"] label { display:none !important; }
+div[data-testid="stTextArea"] textarea {
+    background:#ffffff !important;
+    border:1.5px solid rgba(26,63,168,.2) !important;
+    border-radius:12px !important; color: var(--TX) !important;
+    font-family:'Plus Jakarta Sans',sans-serif !important;
+    font-size:.93rem !important; line-height:1.75 !important;
+    padding:.9rem 1rem !important; resize:none !important;
+    caret-color:var(--P) !important; transition:border-color .18s, box-shadow .18s !important;
+}
+div[data-testid="stTextArea"] textarea:focus {
+    border-color:var(--P) !important; box-shadow:0 0 0 4px rgba(26,63,168,.10) !important; outline:none !important;
+}
+div[data-testid="stTextArea"] textarea::placeholder { color:#cbd5e1 !important; }
+
+/* ── SELECTBOX ── */
+div[data-testid="stSelectbox"] label { display:none !important; }
+div[data-baseweb="select"] > div {
+    background:#ffffff !important; border:1.5px solid rgba(26,63,168,.2) !important;
+    border-radius:11px !important; color: var(--TX) !important;
+    font-family:'Plus Jakarta Sans',sans-serif !important; font-size:.88rem !important;
+}
+div[data-baseweb="select"] span { color: var(--TX) !important; font-weight:600 !important; }
+[data-baseweb="popover"] > div {
+    background:#fff !important; border:1.5px solid var(--BD) !important;
+    border-radius:12px !important; box-shadow:0 12px 40px var(--SM) !important;
+}
+[role="option"] { color: var(--TX) !important; font-family:'Plus Jakarta Sans',sans-serif !important; padding:.6rem 1rem !important; font-size:.88rem !important; }
+[role="option"]:hover { background: var(--PS) !important; color: var(--P) !important; }
 
 /* ── FILE UPLOADER ── */
-[data-testid="stFileUploader"] { background: transparent !important; }
+[data-testid="stFileUploader"] { background:transparent !important; }
+[data-testid="stFileUploader"] label { display:none !important; }
+[data-testid="stFileUploaderDropzone"],
 [data-testid="stFileUploader"] section {
-    background: #ffffff !important;
-    border: 2px dashed rgba(26,63,168,0.22) !important;
-    border-radius: 14px !important; padding: 1.4rem !important;
-    transition: all 0.2s !important;
+    background: var(--PS) !important;
+    border:2px dashed rgba(26,63,168,.28) !important; border-radius:14px !important;
+    min-height:200px !important; display:flex !important; flex-direction:column !important;
+    align-items:center !important; justify-content:center !important;
+    padding:1.2rem !important; transition:all .2s !important;
 }
+[data-testid="stFileUploaderDropzone"]:hover,
 [data-testid="stFileUploader"] section:hover {
-    border-color: var(--rb-primary) !important;
-    background: var(--rb-palest) !important;
+    border-color:var(--P) !important; background:var(--PA) !important;
 }
-[data-testid="stFileUploader"] section > div {
-    color: var(--rb-muted) !important;
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
-    font-size: 0.88rem !important;
-}
+[data-testid="stFileUploader"] small,
+[data-testid="stFileUploader"] span { color: var(--MT) !important; font-size:.82rem !important; }
 [data-testid="stFileUploader"] button {
-    background: var(--rb-pale) !important;
-    border: 1.5px solid rgba(26,63,168,0.28) !important;
-    border-radius: 10px !important; color: var(--rb-primary) !important;
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
-    font-weight: 800 !important; font-size: 0.82rem !important;
-    padding: 7px 18px !important; transition: all 0.18s !important;
+    background:#fff !important; border:1.5px solid var(--BM) !important;
+    border-radius:10px !important; color: var(--P) !important;
+    font-family:'Plus Jakarta Sans',sans-serif !important;
+    font-weight:800 !important; font-size:.82rem !important; padding:6px 18px !important;
+    box-shadow:none !important; transform:none !important;
+    border-bottom:1.5px solid var(--BM) !important; margin-top:0 !important;
+    transition:all .18s !important;
 }
-[data-testid="stFileUploader"] button:hover {
-    background: var(--rb-primary) !important; color: #fff !important;
-}
+[data-testid="stFileUploader"] button:hover { background:var(--P) !important; color:#fff !important; }
 
-/* ── SIDE-BY-SIDE INPUT HEADER ── */
-.sd-input-header {
-    display: flex; align-items: center; gap: 0;
-    margin-bottom: 1rem;
-}
-.sd-input-col-label { flex: 1; }
-.sd-or-pill {
-    flex-shrink: 0;
-    background: linear-gradient(135deg, var(--rb-primary), var(--rb-bright));
-    color: #fff; font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.68rem; font-weight: 900; letter-spacing: 0.12em;
-    padding: 5px 13px; border-radius: 100px;
-    margin: 0 14px;
-    box-shadow: 0 2px 10px rgba(26,63,168,0.3);
-}
+.img-preview { border-radius:12px; overflow:hidden; border:1.5px solid var(--BD); box-shadow:0 4px 18px var(--SH); background:#f0f6ff; margin-top:.4rem; }
+.img-meta { padding:6px 12px; font-family:'Fira Code',monospace; font-size:.7rem; color: var(--P) !important; font-weight:500; background:var(--PS); border-top:1px solid var(--BD); }
 
-/* ── VERTICAL DIVIDER between columns ── */
-[data-testid="column"]:first-child {
-    border-right: 1.5px solid rgba(26,63,168,0.10) !important;
-    padding-right: 1.2rem !important;
-}
-[data-testid="column"]:last-child {
-    padding-left: 1.2rem !important;
-}
+[data-testid="column"]:first-child { border-right:1.5px solid var(--BD) !important; padding-right:1.2rem !important; }
+[data-testid="column"]:last-child { padding-left:1.2rem !important; }
 
-/* ── IMAGE PREVIEW ── */
-.sd-img-preview {
-    border-radius: 12px; overflow: hidden;
-    border: 1.5px solid rgba(26,63,168,0.2);
-    box-shadow: 0 4px 18px rgba(26,63,168,0.10);
-    margin-top: 0.4rem;
-    background: #f0f6ff;
+/* ── ANALYZE BUTTON ── */
+.stButton > button {
+    width:100% !important;
+    background:linear-gradient(135deg,var(--P) 0%,var(--PB) 100%) !important;
+    color:#fff !important; font-family:'Plus Jakarta Sans',sans-serif !important;
+    font-weight:800 !important; font-size:1rem !important; border:none !important;
+    border-radius:12px !important; padding:.88rem 2rem !important;
+    box-shadow:0 4px 20px var(--SM) !important;
+    border-bottom:3px solid rgba(0,0,0,.18) !important;
+    transition:all .18s !important; margin-top:.6rem !important;
 }
-.sd-img-meta {
-    padding: 7px 12px;
-    font-family: 'Fira Code', monospace;
-    font-size: 0.7rem; color: var(--rb-primary); font-weight: 500;
-    background: var(--rb-palest);
-    border-top: 1px solid rgba(26,63,168,0.1);
-}
+.stButton > button:hover { transform:translateY(-2px) !important; box-shadow:0 8px 32px rgba(26,63,168,.45) !important; }
+.stButton > button:active { transform:translateY(0) !important; border-bottom-width:1px !important; }
 
-/* ── IMAGE DROPZONE (empty state) ── */
-.sd-img-dropzone {
-    border: 2px dashed rgba(26,63,168,0.22);
-    border-radius: 14px; padding: 1.8rem 1rem;
-    text-align: center; background: var(--rb-palest);
-    transition: all 0.2s; cursor: pointer;
-    min-height: 200px;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    margin-top: 0.4rem;
-}
-.sd-img-dropzone:hover {
-    border-color: var(--rb-primary);
-    background: var(--rb-pale);
-}
+/* ── RESULT CARDS ── */
+.result { border-radius:18px; padding:1.8rem 2rem; margin-top:1.4rem; position:relative; overflow:hidden; }
+.result::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:18px 18px 0 0; }
+.result.spam  { background:rgba(255,241,241,.97); border:1.5px solid rgba(220,38,38,.2);  box-shadow:0 8px 36px rgba(220,38,38,.08); }
+.result.warn  { background:rgba(255,253,235,.97); border:1.5px solid rgba(217,119,6,.2);  box-shadow:0 8px 36px rgba(217,119,6,.08); }
+.result.clean { background:rgba(236,253,245,.97); border:1.5px solid rgba(5,150,105,.2);  box-shadow:0 8px 36px rgba(5,150,105,.08); }
+.result.spam::before  { background:linear-gradient(90deg,transparent,#dc2626,transparent); }
+.result.warn::before  { background:linear-gradient(90deg,transparent,#f59e0b,transparent); }
+.result.clean::before { background:linear-gradient(90deg,transparent,#10b981,transparent); }
+.verdict { font-size:2rem; font-weight:900; letter-spacing:-.5px; margin-bottom:4px; }
+.vmeta { font-size:.76rem; color: var(--MT) !important; letter-spacing:.06em; text-transform:uppercase; margin-bottom:1rem; font-weight:600; }
+.conf-track { height:7px; background:rgba(0,0,0,.07); border-radius:100px; overflow:hidden; margin-bottom:1rem; }
+.conf-fill { height:100%; border-radius:100px; }
+.reason { background:rgba(255,255,255,.85); border-radius:11px; padding:.9rem 1.1rem; font-size:.9rem; line-height:1.75; color: var(--SB) !important; margin-bottom:1rem; border:1px solid rgba(0,0,0,.07); }
+.sig-title { font-family:'Fira Code',monospace; font-size:.64rem; font-weight:500; letter-spacing:.14em; text-transform:uppercase; color: var(--MT) !important; margin-bottom:8px; }
+.sig { display:inline-block; padding:4px 13px; border-radius:100px; font-size:.74rem; font-weight:700; margin:3px 3px 3px 0; }
+.sig.high   { background:rgba(220,38,38,.10);  border:1px solid rgba(220,38,38,.28); }
+.sig.medium { background:rgba(217,119,6,.10);  border:1px solid rgba(217,119,6,.28); }
+.sig.low    { background:rgba(5,150,105,.10); border:1px solid rgba(5,150,105,.28); }
 
-/* ── SCREENSHOT BUTTON (inside components.html iframe) ── */
-.sd-screenshot-btn {
-    display: inline-flex; align-items: center; gap: 7px;
-    background: rgba(255,255,255,0.9);
-    border: 1.5px solid var(--rb-borderm);
-    border-radius: 100px; padding: 8px 20px;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.82rem; font-weight: 700; color: var(--rb-primary);
-    cursor: pointer; transition: all 0.18s;
-    box-shadow: 0 2px 10px var(--rb-shadow);
-}
-.sd-screenshot-btn:hover {
-    background: var(--rb-primary); color: #fff;
-    box-shadow: 0 4px 18px var(--rb-shadowm);
-    transform: translateY(-1px);
-}
+/* ── STATS ── */
+.stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:1.2rem; }
+.stat { background:#fff; border:1.5px solid var(--BD); border-radius:14px; padding:1rem .75rem; text-align:center; box-shadow:0 2px 10px var(--SH); }
+.stat-num { font-size:1.75rem; font-weight:900; line-height:1; }
+.stat-lbl { font-size:.64rem; color: var(--MT) !important; text-transform:uppercase; letter-spacing:.1em; margin-top:5px; font-weight:600; }
+
+/* ── HISTORY ── */
+.hist-item { background:#fff; border:1.5px solid var(--BD); border-radius:12px; padding:.8rem 1rem; margin-bottom:8px; display:flex; align-items:center; gap:10px; transition:all .15s; box-shadow:0 2px 8px var(--SH); }
+.hist-item:hover { border-color:var(--BM); box-shadow:0 4px 16px var(--SM); transform:translateX(3px); }
+.hist-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.hist-preview { font-size:.76rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; color: var(--MT) !important; }
+
+.divider { height:1px; margin:1.8rem 0; background:linear-gradient(90deg,transparent,var(--BD),transparent); }
+.lbl { font-family:'Fira Code',monospace; font-size:.65rem; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color: var(--MT) !important; }
+
+div[data-testid="stAlert"] { background:#fff !important; border:1.5px solid var(--BD) !important; border-radius:14px !important; }
+div[data-testid="stAlert"] p { color: var(--TX) !important; }
+.stSpinner > div { border-top-color: var(--P) !important; }
+::-webkit-scrollbar { width:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--BM); border-radius:10px; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── html2canvas screenshot injector ──────────────────────────────────
-import streamlit.components.v1 as components
-
-def inject_screenshot_button():
-    """Renders a floating screenshot button using html2canvas."""
-    components.html("""
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<style>
-body { margin:0; background:transparent; }
-#_sc_btn {
-  position: fixed; bottom: 24px; right: 24px; z-index: 999999;
-  display: flex; align-items: center; gap: 8px;
-  background: linear-gradient(135deg, #1a3fa8, #2563eb);
-  color: #fff; border: none; border-radius: 100px;
-  padding: 12px 22px;
-  font-family: 'Plus Jakarta Sans', 'Instrument Sans', sans-serif;
-  font-size: 0.88rem; font-weight: 800; cursor: pointer;
-  box-shadow: 0 4px 20px rgba(26,63,168,0.45);
-  transition: all 0.18s; letter-spacing: 0.01em;
-  border-bottom: 3px solid #2a4faa;
-}
-#_sc_btn:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(59,111,212,0.6); }
-#_sc_btn:active { transform: translateY(0); border-bottom-width: 1px; }
-#_sc_btn.busy { opacity:0.6; cursor:wait; pointer-events:none; }
-
-#_sc_toast {
-  display: none; position: fixed; top: 20px; left:50%;
-  transform: translateX(-50%);
-  background: linear-gradient(135deg,#1a3fa8,#2563eb);
-  color:#fff; padding:10px 26px; border-radius:100px;
-  font-family:'Plus Jakarta Sans',sans-serif; font-size:0.88rem; font-weight:700;
-  box-shadow:0 4px 24px rgba(26,63,168,0.4); z-index:999999;
-  white-space:nowrap; animation:_toastIn 0.25s ease;
-}
-@keyframes _toastIn { from{opacity:0;transform:translateX(-50%) translateY(-12px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
-</style>
-
-<div id="_sc_toast"></div>
-<button id="_sc_btn" onclick="_takeScreenshot()">📸 Screenshot</button>
-
-<script>
-function _takeScreenshot() {
-  var btn   = document.getElementById('_sc_btn');
-  var toast = document.getElementById('_sc_toast');
-
-  // Message the Streamlit parent frame to take the screenshot
-  window.parent.postMessage({ action: 'sd_screenshot' }, '*');
-  btn.classList.add('busy');
-  btn.innerHTML = '⏳ Capturing…';
-
-  setTimeout(function(){
-    btn.classList.remove('busy');
-    btn.innerHTML = '📸 Screenshot';
-  }, 5000);
-}
-
-// Listen for success/fail back from parent
-window.addEventListener('message', function(e){
-  var toast = document.getElementById('_sc_toast');
-  var btn   = document.getElementById('_sc_btn');
-  if(e.data && e.data.action === 'sd_captured') {
-    btn.classList.remove('busy');
-    btn.innerHTML = '✅ Saved!';
-    toast.textContent = '✅ Screenshot saved!';
-    toast.style.display = 'block';
-    setTimeout(function(){
-      toast.style.display = 'none';
-      btn.innerHTML = '📸 Screenshot';
-    }, 3000);
-  }
-});
-</script>
-""", height=0)
-
 # ── Session State ─────────────────────────────────────────────────────
-for k, v in [("history", []), ("last_result", None), ("screenshot_trigger", False)]:
-    if k not in st.session_state:
-        st.session_state[k] = v
+for k, v in [("history", []), ("last_result", None)]:
+    if k not in st.session_state: st.session_state[k] = v
 
 # ── Sidebar ───────────────────────────────────────────────────────────
 st.sidebar.markdown("## ⚙️ Detection Settings")
@@ -601,440 +331,256 @@ check_impersonate = st.sidebar.checkbox("🎭 Impersonation patterns",     value
 check_sentiment   = st.sidebar.checkbox("🧠 Sentiment analysis",         value=False)
 st.sidebar.markdown("---")
 threshold = st.sidebar.slider("Spam threshold (%)", 10, 90, 50, 5)
-st.sidebar.markdown(f"<small style='color:#8a9abf'>Messages ≥ {threshold}% confidence → flagged as spam</small>", unsafe_allow_html=True)
+st.sidebar.caption(f"Messages ≥ {threshold}% confidence → flagged as spam")
 st.sidebar.markdown("---")
 if st.session_state.history:
     if st.sidebar.button("🗑️ Clear History"):
-        st.session_state.history = []
-        st.rerun()
-st.sidebar.markdown("<small style='color:#b0bcd8'>AI Spam Detector · v2.0<br>Powered by Groq + LLaMA 3.1</small>", unsafe_allow_html=True)
+        st.session_state.history = []; st.rerun()
+st.sidebar.caption("SpamShield AI · v2.0\nPowered by Groq + LLaMA 3")
 
-# ── NAV BAR ──────────────────────────────────────────────────────────
+# ── Navbar ────────────────────────────────────────────────────────────
 st.markdown("""
-<div class="sd-nav">
-  <div class="sd-nav-logo">
-    <div class="sd-nav-icon">🛡️</div>
-    <div class="sd-nav-name">Spam<span>Shield</span></div>
+<div class="nav">
+  <div class="nav-logo">
+    <div class="nav-icon">🛡️</div>
+    <div class="nav-name">Spam<b>Shield</b></div>
   </div>
-  <div class="sd-nav-center">AI DETECTION PLATFORM</div>
-  <div class="sd-nav-status">
-    <div class="sd-status-dot"></div>
-    Active
-  </div>
-</div>
-""", unsafe_allow_html=True)
+  <div class="nav-pill">AI DETECTION PLATFORM</div>
+  <div class="nav-status"><div class="status-dot"></div> Active</div>
+</div>""", unsafe_allow_html=True)
 
-# ── HERO ─────────────────────────────────────────────────────────────
+# ── Hero ──────────────────────────────────────────────────────────────
 st.markdown("""
-<div class="sd-hero">
-  <div class="sd-hero-tag">
-    <div class="sd-hero-tag-dot"></div>
-    Real-time AI Analysis
+<div class="hero">
+  <div class="hero-tag"><div class="hero-tag-dot"></div> Real-time AI Analysis</div>
+  <h1>Detect Spam,</h1>
+  <span class="hero-accent">Phishing & Scams</span>
+  <p>Paste a message or upload a screenshot — SpamShield analyzes for threats,
+     scams, urgency tactics, and phishing patterns instantly.</p>
+  <div class="badges">
+    <span class="badge spam">🚨 Spam Detection</span>
+    <span class="badge warn">⚠️ Suspicious Flags</span>
+    <span class="badge clean">✅ Clean Verification</span>
   </div>
-  <h1 class="sd-h1">Detect Spam,</h1>
-  <span class="sd-h1-accent">Phishing & Scams</span>
-  <p class="sd-hero-sub">
-    Paste any message — SpamShield analyzes it for threats, scams,
-    urgency tactics, and phishing patterns instantly.
-  </p>
-  <div class="sd-badge-row">
-    <span class="sd-badge spam">🚨 Spam Detection</span>
-    <span class="sd-badge warn">⚠️ Suspicious Flags</span>
-    <span class="sd-badge clean">✅ Clean Verification</span>
-  </div>
-</div>
-""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
 
-# ── INPUT CARD ────────────────────────────────────────────────────────
-st.markdown('<div class="sd-input-card">', unsafe_allow_html=True)
-
-# ── Header row: label + OR divider layout ────────────────────────────
+# ── Input Card — Text LEFT | Image RIGHT ─────────────────────────────
+st.markdown('<div class="input-card">', unsafe_allow_html=True)
 st.markdown("""
-<div class="sd-input-header">
-  <div class="sd-input-col-label">
-    <span class="sd-section-label">📝 Paste Message</span>
-  </div>
-  <div class="sd-or-pill">OR</div>
-  <div class="sd-input-col-label">
-    <span class="sd-section-label">🖼️ Upload Image</span>
-  </div>
-</div>
-""", unsafe_allow_html=True)
+<div class="input-row-label">
+  <div class="col-label">📝 Paste Message</div>
+  <div class="or-pill">OR</div>
+  <div class="col-label" style="text-align:right;">🖼️ Upload Image</div>
+</div>""", unsafe_allow_html=True)
 
-# ── Side-by-side columns ──────────────────────────────────────────────
-col_text, col_img = st.columns([1, 1], gap="medium")
+col_txt, col_img = st.columns(2, gap="medium")
+user_input = ""; uploaded_img = None; img_b64 = None; img_mime = None
 
-user_input   = ""
-uploaded_img = None
-img_b64      = None
-img_mime     = None
-
-with col_text:
-    # Sample quick-fill
-    sample_texts = {
+with col_txt:
+    SAMPLES = {
         "— Try a sample —": "",
-        "🔴 Phishing Email":     "URGENT: Your account has been suspended! Click here immediately to verify your identity and restore access: http://secure-bank-login.xyz/verify?token=abc123. Failure to do so within 24 hours will result in permanent account closure.",
-        "🟡 Suspicious Offer":   "Congratulations! You've been selected as today's lucky winner of an iPhone 15 Pro! Just pay a small $2 shipping fee to claim your prize. Visit claimprize.info now before it expires!",
-        "🟢 Legitimate Message": "Hi, just a reminder that our team meeting is scheduled for tomorrow at 10am in Conference Room B. Please review the agenda I shared last week.",
-        "🔴 Scam SMS":           "FREE MSG: Your loan of Rs.50,000 is approved! Call us now at 9988776655 to claim. Limited time offer. Reply STOP to opt out.",
+        "🔴 Phishing Email":   "URGENT: Your account has been suspended! Click here to verify: http://secure-bank-login.xyz/verify?token=abc123. Failure within 24h = permanent closure.",
+        "🟡 Suspicious Offer": "Congratulations! You've been selected as today's lucky winner of an iPhone 15 Pro! Just pay $2 shipping: claimprize.info",
+        "🟢 Legit Message":    "Hi, just a reminder that our team meeting is tomorrow at 10am in Conference Room B. Please review the agenda I shared last week.",
+        "🔴 Scam SMS":         "FREE MSG: Your loan of Rs.50,000 is approved! Call 9988776655 now to claim. Limited time. Reply STOP to opt out.",
     }
-    selected     = st.selectbox("Sample", list(sample_texts.keys()), label_visibility="collapsed")
-    default_text = sample_texts.get(selected, "")
-    user_input   = st.text_area(
-        "Message", value=default_text, height=200,
-        placeholder="Paste an email, SMS, social post, or any suspicious message here…",
-        label_visibility="collapsed"
-    )
-    char_count = len(user_input)
-    word_count = len(user_input.split()) if user_input.strip() else 0
-    st.markdown(
-        f"<small style='color:#94a3b8;font-family:Fira Code,monospace;font-size:0.7rem;'>"
-        f"{char_count} chars · {word_count} words</small>",
-        unsafe_allow_html=True
-    )
+    selected   = st.selectbox("sample", list(SAMPLES.keys()), label_visibility="collapsed")
+    user_input = st.text_area("msg", value=SAMPLES.get(selected,""), height=200,
+                              placeholder="Paste an email, SMS, social post, or any suspicious message here…",
+                              label_visibility="collapsed")
+    chars = len(user_input); words = len(user_input.split()) if user_input.strip() else 0
+    st.markdown(f"<span style='font-family:Fira Code,monospace;font-size:.7rem;color:#94a3b8;'>{chars} chars · {words} words</span>", unsafe_allow_html=True)
 
 with col_img:
-    uploaded_img = st.file_uploader(
-        "Upload screenshot",
-        type=["png", "jpg", "jpeg", "webp", "gif"],
-        label_visibility="collapsed",
-        key="img_upload"
-    )
-
+    uploaded_img = st.file_uploader("img", type=["png","jpg","jpeg","webp","gif"],
+                                    label_visibility="collapsed", key="img_upload")
     if uploaded_img:
         img_bytes = uploaded_img.read()
         img_b64   = base64.b64encode(img_bytes).decode()
         img_mime  = uploaded_img.type or "image/png"
         st.markdown(f"""
-<div class="sd-img-preview">
+<div class="img-preview">
   <img src="data:{img_mime};base64,{img_b64}"
-       style="width:100%;display:block;max-height:200px;
-              object-fit:contain;background:#f0f6ff;padding:8px;"/>
-  <div class="sd-img-meta">✅ {uploaded_img.name} · {len(img_bytes)/1024:.1f} KB</div>
+       style="width:100%;display:block;max-height:195px;object-fit:contain;padding:6px;"/>
+  <div class="img-meta">✅ {uploaded_img.name} · {len(img_bytes)/1024:.1f} KB</div>
 </div>""", unsafe_allow_html=True)
     else:
         st.markdown("""
-<div class="sd-img-dropzone">
-  <div style="font-size:2rem;margin-bottom:6px;">📸</div>
-  <div style="font-size:0.82rem;font-weight:700;color:#475569;">Drop a screenshot here</div>
-  <div style="font-size:0.74rem;color:#94a3b8;margin-top:4px;line-height:1.5;">
-    PNG · JPG · WEBP · GIF<br>
-    Spam SMS · Phishing emails<br>WhatsApp scams · Notifications
+<div style="text-align:center;padding:1.5rem .5rem;pointer-events:none;">
+  <div style="font-size:2rem;margin-bottom:.5rem;">📸</div>
+  <div style="font-size:.82rem;font-weight:700;color:#475569;">Drop a screenshot here</div>
+  <div style="font-size:.74rem;color:#94a3b8;margin-top:4px;line-height:1.6;">
+    PNG · JPG · WEBP · GIF<br>Spam SMS · Phishing emails<br>WhatsApp scams
   </div>
 </div>""", unsafe_allow_html=True)
 
 analyze_btn = st.button("🔍  Analyze", use_container_width=True)
-st.markdown('</div>', unsafe_allow_html=True)  # close sd-input-card
+st.markdown('</div>', unsafe_allow_html=True)
 
-# ── ANALYZE FUNCTIONS ─────────────────────────────────────────────────
-def _build_checks_and_mode():
+# ── Analysis Logic ────────────────────────────────────────────────────
+def _ctx():
     checks = []
     if check_phishing:    checks.append("phishing links, deceptive URLs, lookalike domains")
     if check_urgency:     checks.append("urgency tactics, pressure language, countdown threats")
     if check_offers:      checks.append("fake prize claims, lottery wins, suspicious offers")
     if check_impersonate: checks.append("impersonation of banks, government, brands, support teams")
     if check_sentiment:   checks.append("overall sentiment and emotional manipulation")
-    checks_str = "\n".join(f"- {c}" for c in checks) if checks else "- General spam patterns"
-    mode_instruction = {
-        "Auto (Balanced)":          "Use balanced judgment.",
-        "Strict (Low Tolerance)":   "Be strict — flag anything remotely suspicious.",
-        "Lenient (High Tolerance)": "Only flag clear, obvious spam.",
-    }[mode]
-    content_hint = f" The content type is: {content_type}." if content_type != "Auto-detect" else ""
-    return checks_str, mode_instruction, content_hint
+    cs = "\n".join(f"- {c}" for c in checks) if checks else "- General spam patterns"
+    ms = {"Auto (Balanced)":"Use balanced judgment.",
+          "Strict (Low Tolerance)":"Be strict — flag anything remotely suspicious.",
+          "Lenient (High Tolerance)":"Only flag clear, obvious spam."}[mode]
+    hint = f" Content type: {content_type}." if content_type != "Auto-detect" else ""
+    return cs, ms, hint
 
-JSON_SCHEMA = """{
-  "verdict": "SPAM" | "SUSPICIOUS" | "CLEAN",
-  "confidence": <integer 0-100>,
-  "reason": "<2-3 sentence explanation>",
-  "signals": [{"label": "<signal name>", "severity": "high" | "medium" | "low"}],
-  "spam_score": <integer 0-100>,
-  "category": "<Phishing | Scam | Promotional | Malware | Social Engineering | Legitimate | Unknown>",
-  "sentiment": "<Neutral | Alarming | Enticing | Threatening | Friendly>"
-}"""
+SCHEMA = '{"verdict":"SPAM|SUSPICIOUS|CLEAN","confidence":0-100,"reason":"...","signals":[{"label":"...","severity":"high|medium|low"}],"spam_score":0-100,"category":"...","sentiment":"..."}'
 
-def analyze_spam_text(text: str) -> dict:
-    checks_str, mode_instruction, content_hint = _build_checks_and_mode()
-    prompt = f"""You are an expert spam and scam detection AI. Analyze the following message.{content_hint}
-DETECTION MODE: {mode_instruction}
-CHECK FOR:
-{checks_str}
-- General spam indicators (excessive caps, punctuation, grammar errors)
-- Social engineering tactics
-- Request for personal info, passwords, OTPs, money transfers
+def _parse(raw):
+    c = re.sub(r'```json|```','',raw).strip()
+    m = re.search(r'\{.*\}', c, re.DOTALL)
+    return json.loads(m.group() if m else c)
 
-Respond ONLY with valid JSON matching this schema exactly:
-{JSON_SCHEMA}
-
-MESSAGE:
-\"\"\"{text[:3000]}\"\"\"
-"""
-    response = client.chat.completions.create(
+def analyze_text(text):
+    cs, ms, hint = _ctx()
+    prompt = f"""Spam detection AI. Analyze this message.{hint}
+MODE: {ms}
+CHECK: {cs}
+Return ONLY valid JSON: {SCHEMA}
+MESSAGE: \"\"\"{text[:3000]}\"\"\""""
+    r = client.chat.completions.create(
         model="llama-3.1-8b-instant",
-        messages=[
-            {"role": "system", "content": "You are a precision spam detection engine. Always return valid JSON only. No extra text, no markdown."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.1, max_tokens=800
-    )
-    raw     = response.choices[0].message.content.strip()
-    cleaned = re.sub(r'```json|```', '', raw).strip()
-    result  = json.loads(cleaned)
-    if result.get("confidence", 0) >= threshold and result.get("verdict") == "SUSPICIOUS":
+        messages=[{"role":"system","content":"Return valid JSON only."},{"role":"user","content":prompt}],
+        temperature=0.1, max_tokens=800)
+    result = _parse(r.choices[0].message.content)
+    if result.get("confidence",0) >= threshold and result.get("verdict") == "SUSPICIOUS":
         result["verdict"] = "SPAM"
     return result
 
-def analyze_spam_image(b64_data: str, mime: str) -> dict:
-    """Uses Groq vision model to OCR the image and detect spam."""
-    checks_str, mode_instruction, content_hint = _build_checks_and_mode()
-    prompt = f"""You are an expert spam and scam detection AI with vision capabilities.
-The user has uploaded an image that may contain a screenshot of a message, email, SMS, WhatsApp chat, or notification.{content_hint}
-
-STEP 1 — READ: Extract ALL visible text from the image verbatim.
-STEP 2 — ANALYZE: Examine the extracted text for spam/scam indicators.
-DETECTION MODE: {mode_instruction}
-CHECK FOR:
-{checks_str}
-- Suspicious sender names, email addresses, phone numbers visible in the image
-- Urgency language, threats, fake offers, phishing links
-- Any red flags visible in the UI (fake bank logos, suspicious design)
-- General spam indicators
-
-Respond ONLY with valid JSON matching this schema exactly:
-{JSON_SCHEMA}
-
-Note: If the image contains no readable text or is not a message screenshot, set verdict to CLEAN with a low confidence and explain in reason.
-"""
-    response = client.chat.completions.create(
+def analyze_image(b64, mime):
+    cs, ms, hint = _ctx()
+    prompt = f"""Spam detection AI with vision.{hint}
+Image contains screenshot of message/email/SMS.
+STEP 1: Extract ALL visible text. STEP 2: Analyze for spam.
+MODE: {ms} CHECK: {cs}
+Return ONLY valid JSON: {SCHEMA}
+If no text visible, return CLEAN with low confidence."""
+    r = client.chat.completions.create(
         model="meta-llama/llama-4-scout-17b-16e-instruct",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{mime};base64,{b64_data}"}
-                    },
-                    {"type": "text", "text": prompt}
-                ]
-            }
-        ],
-        temperature=0.1, max_tokens=900
-    )
-    raw     = response.choices[0].message.content.strip()
-    cleaned = re.sub(r'```json|```', '', raw).strip()
-    # Find JSON object in response
-    match = re.search(r'\{.*\}', cleaned, re.DOTALL)
-    if match:
-        cleaned = match.group()
-    result = json.loads(cleaned)
-    if result.get("confidence", 0) >= threshold and result.get("verdict") == "SUSPICIOUS":
+        messages=[{"role":"user","content":[
+            {"type":"image_url","image_url":{"url":f"data:{mime};base64,{b64}"}},
+            {"type":"text","text":prompt}]}],
+        temperature=0.1, max_tokens=900)
+    result = _parse(r.choices[0].message.content)
+    if result.get("confidence",0) >= threshold and result.get("verdict") == "SUSPICIOUS":
         result["verdict"] = "SPAM"
     return result
 
-# ── RUN ANALYSIS ──────────────────────────────────────────────────────
+# ── Run ───────────────────────────────────────────────────────────────
 if analyze_btn:
-    is_image_mode = (uploaded_img is not None and img_b64 is not None)
-    is_text_mode  = bool(user_input.strip())
-
-    if not is_image_mode and not is_text_mode:
-        st.error("⚠️ Please paste a message or upload an image to analyze.")
-    elif is_text_mode and len(user_input.strip()) < 5:
-        st.warning("Message is too short to analyze meaningfully.")
+    use_img  = uploaded_img is not None and img_b64 is not None
+    use_text = bool(user_input.strip())
+    if not use_img and not use_text:
+        st.error("⚠️ Please paste a message or upload an image.")
+    elif use_text and len(user_input.strip()) < 5:
+        st.warning("Message is too short to analyze.")
     else:
-        spinner_msg = "🧠 Analyzing image with AI Vision…" if is_image_mode else "🧠 Analyzing message with AI…"
-        with st.spinner(spinner_msg):
+        with st.spinner("🧠 Analyzing image with AI Vision…" if use_img else "🧠 Analyzing message…"):
             try:
-                if is_image_mode:
-                    result = analyze_spam_image(img_b64, img_mime)
-                else:
-                    result = analyze_spam_text(user_input)
+                result = analyze_image(img_b64, img_mime) if use_img else analyze_text(user_input)
             except json.JSONDecodeError:
-                st.error("❌ AI returned malformed response. Please try again.")
-                st.stop()
+                st.error("❌ AI returned malformed response. Please try again."); st.stop()
             except Exception as e:
-                st.error(f"❌ Analysis failed: {e}")
-                st.stop()
+                st.error(f"❌ Analysis failed: {e}"); st.stop()
 
-        st.session_state.last_result = result
-        verdict    = result.get("verdict", "UNKNOWN")
-        confidence = result.get("confidence", 0)
-        reason     = result.get("reason", "No explanation provided.")
-        signals    = result.get("signals", [])
-        category   = result.get("category", "Unknown")
-        sentiment  = result.get("sentiment", "Neutral")
-        input_preview = (f"[Image: {uploaded_img.name}]" if is_image_mode else user_input[:55] + ("…" if len(user_input) > 55 else ""))
+        verdict    = result.get("verdict","UNKNOWN")
+        confidence = result.get("confidence",0)
+        reason     = result.get("reason","No explanation provided.")
+        signals    = result.get("signals",[])
+        category   = result.get("category","Unknown")
+        sentiment  = result.get("sentiment","Neutral")
+        preview    = f"[Image: {uploaded_img.name}]" if use_img else (user_input[:55]+("…" if len(user_input)>55 else ""))
 
-        css_cls, label, bar_color = {
+        css, lbl, bar = {
             "SPAM":       ("spam",  "🚨 SPAM DETECTED", "#dc2626"),
             "SUSPICIOUS": ("warn",  "⚠️ SUSPICIOUS",    "#d97706"),
-            "CLEAN":      ("clean", "✅ CLEAN",          "#16a34a"),
-        }.get(verdict, ("warn", "⚠️ UNKNOWN", "#d97706"))
+            "CLEAN":      ("clean", "✅ CLEAN",          "#059669"),
+        }.get(verdict, ("warn","⚠️ UNKNOWN","#d97706"))
 
-        st.session_state.history.insert(0, {
-            "verdict": verdict, "confidence": confidence,
-            "category": category,
-            "preview": input_preview,
-        })
-        if len(st.session_state.history) > 10:
-            st.session_state.history = st.session_state.history[:10]
+        st.session_state.history.insert(0,{"verdict":verdict,"confidence":confidence,"category":category,"preview":preview})
+        if len(st.session_state.history) > 10: st.session_state.history = st.session_state.history[:10]
 
-        # Result card
         st.markdown(f"""
-<div class="sd-result {css_cls}" id="sd-result-card">
-  <div class="sd-verdict {css_cls}">{label}</div>
-  <div class="sd-meta">Confidence: {confidence}% &nbsp;·&nbsp; {category} &nbsp;·&nbsp; {sentiment}</div>
-  <div class="sd-conf-track">
-    <div class="sd-conf-fill" style="width:{confidence}%;background:{bar_color};"></div>
-  </div>
-  <div class="sd-reason">{reason}</div>
-""", unsafe_allow_html=True)
-
+<div class="result {css}">
+  <div class="verdict {css}">{lbl}</div>
+  <div class="vmeta">Confidence: {confidence}% &nbsp;·&nbsp; {category} &nbsp;·&nbsp; {sentiment}</div>
+  <div class="conf-track"><div class="conf-fill" style="width:{confidence}%;background:{bar};"></div></div>
+  <div class="reason">{reason}</div>""", unsafe_allow_html=True)
         if signals:
-            tags_html = "".join(
-                f'<span class="sd-tag {s.get("severity","low")}">'
-                f'{"🔴" if s.get("severity")=="high" else "🟡" if s.get("severity")=="medium" else "🟢"}'
-                f' {s.get("label","")}</span>'
-                for s in signals
-            )
-            st.markdown(f'<div class="sd-signals-title">🔎 Detected Signals</div><div>{tags_html}</div>', unsafe_allow_html=True)
-
+            tags_html = []
+            for s in signals:
+                sev = s.get("severity","low")
+                ico = "🔴" if sev=="high" else "🟡" if sev=="medium" else "🟢"
+                tags_html.append(f'<span class="sig {sev}">{ico} {s.get("label","")}</span>')
+            tags = "".join(tags_html)
+            st.markdown(f'<div class="sig-title">🔎 Detected Signals</div><div>{tags}</div>', unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Stats row
-        n_spam  = sum(1 for h in st.session_state.history if h["verdict"] == "SPAM")
-        n_sus   = sum(1 for h in st.session_state.history if h["verdict"] == "SUSPICIOUS")
-        n_clean = sum(1 for h in st.session_state.history if h["verdict"] == "CLEAN")
+        n_spam  = sum(1 for h in st.session_state.history if h["verdict"]=="SPAM")
+        n_sus   = sum(1 for h in st.session_state.history if h["verdict"]=="SUSPICIOUS")
+        n_clean = sum(1 for h in st.session_state.history if h["verdict"]=="CLEAN")
         total   = len(st.session_state.history)
         st.markdown(f"""
-<div class="sd-stats">
-  <div class="sd-stat"><div class="sd-stat-num" style="color:#dc2626">{n_spam}</div><div class="sd-stat-lbl">Spam</div></div>
-  <div class="sd-stat"><div class="sd-stat-num" style="color:#d97706">{n_sus}</div><div class="sd-stat-lbl">Suspicious</div></div>
-  <div class="sd-stat"><div class="sd-stat-num" style="color:#16a34a">{n_clean}</div><div class="sd-stat-lbl">Clean</div></div>
-  <div class="sd-stat"><div class="sd-stat-num" style="color:#1a3fa8">{total}</div><div class="sd-stat-lbl">Scanned</div></div>
-</div>
-""", unsafe_allow_html=True)
+<div class="stats">
+  <div class="stat"><div class="stat-num" style="color:#dc2626">{n_spam}</div><div class="stat-lbl">Spam</div></div>
+  <div class="stat"><div class="stat-num" style="color:#d97706">{n_sus}</div><div class="stat-lbl">Suspicious</div></div>
+  <div class="stat"><div class="stat-num" style="color:#059669">{n_clean}</div><div class="stat-lbl">Clean</div></div>
+  <div class="stat"><div class="stat-num" style="color:#1a3fa8">{total}</div><div class="stat-lbl">Scanned</div></div>
+</div>""", unsafe_allow_html=True)
 
-# ── HISTORY ───────────────────────────────────────────────────────────
+# ── History ───────────────────────────────────────────────────────────
 if st.session_state.history:
-    st.markdown('<div class="sd-divider"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="sd-section-label" style="margin-bottom:0.7rem;">📜 Recent Scans</div>', unsafe_allow_html=True)
-    dot_map  = {"SPAM": "#dc2626", "CLEAN": "#16a34a", "SUSPICIOUS": "#d97706"}
-    icon_map = {"SPAM": "🚨", "CLEAN": "✅", "SUSPICIOUS": "⚠️"}
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="lbl" style="margin-bottom:.7rem;">📜 Recent Scans</div>', unsafe_allow_html=True)
+    DOT  = {"SPAM":"#dc2626","CLEAN":"#059669","SUSPICIOUS":"#d97706"}
+    ICON = {"SPAM":"🚨","CLEAN":"✅","SUSPICIOUS":"⚠️"}
     for h in st.session_state.history:
-        dot_color = dot_map.get(h["verdict"], "#d97706")
+        dc = DOT.get(h["verdict"],"#d97706")
         st.markdown(f"""
-<div class="sd-history-item">
-  <div class="sd-hist-dot" style="background:{dot_color};box-shadow:0 0 0 3px {dot_color}28;"></div>
+<div class="hist-item">
+  <div class="hist-dot" style="background:{dc};box-shadow:0 0 0 3px {dc}30;"></div>
   <div style="flex:1;overflow:hidden">
-    <span style="color:#1a1f3a;font-weight:700;font-size:0.88rem">{icon_map.get(h["verdict"],"❓")} {h["verdict"]}</span>
-    <span style="color:#b0bcd8;margin:0 6px;font-size:0.8rem">·</span>
-    <span style="color:#8a9abf;font-size:0.78rem">{h["confidence"]}% · {h["category"]}</span>
-    <div style="color:#b0bcd8;font-size:0.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">{h["preview"]}</div>
+    <span style="font-weight:700;font-size:.88rem;">{ICON.get(h["verdict"],"❓")} {h["verdict"]}</span>
+    <span style="margin:0 6px;color:#cbd5e1;">·</span>
+    <span style="font-size:.78rem;color:#64748b;">{h["confidence"]}% · {h["category"]}</span>
+    <div class="hist-preview">{h["preview"]}</div>
   </div>
 </div>""", unsafe_allow_html=True)
 
-# ── SCREENSHOT SECTION ────────────────────────────────────────────────
-st.markdown('<div class="sd-divider"></div>', unsafe_allow_html=True)
-
-# Screenshot widget — uses html2canvas to capture the full Streamlit page
+# ── Screenshot ────────────────────────────────────────────────────────
+st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 components.html("""
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
-  body { margin:0; background:transparent; }
-  #_cap_btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: rgba(255,255,255,0.82);
-    border: 1.5px solid rgba(59,111,212,0.28);
-    border-radius: 100px; padding: 9px 22px;
-    font-family: 'Cabinet Grotesk','Instrument Sans',sans-serif;
-    font-size: 0.85rem; font-weight: 700; color: #1a3fa8;
-    cursor: pointer; transition: all 0.18s;
-    backdrop-filter: blur(8px);
-    box-shadow: 0 2px 12px rgba(59,111,212,0.15);
-  }
-  #_cap_btn:hover { background: #1a3fa8; color:#fff; box-shadow:0 4px 18px rgba(26,63,168,0.4); transform:translateY(-1px); }
-  #_cap_btn.busy  { opacity:0.55; cursor:wait; pointer-events:none; }
-  #_cap_toast {
-    display:none; position:fixed; top:18px; left:50%; transform:translateX(-50%);
-    background:linear-gradient(135deg,#1a3fa8,#2563eb); color:#fff;
-    padding:9px 24px; border-radius:100px;
-    font-family:'Plus Jakarta Sans',sans-serif; font-size:0.86rem; font-weight:700;
-    box-shadow:0 4px 22px rgba(26,63,168,0.4); z-index:999999; white-space:nowrap;
-    animation:_toastIn 0.22s ease;
-  }
-  @keyframes _toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+body{margin:0;background:transparent;}
+#btn{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1.5px solid rgba(26,63,168,.28);border-radius:100px;padding:9px 22px;font-family:'Plus Jakarta Sans',sans-serif;font-size:.85rem;font-weight:700;color:#1a3fa8;cursor:pointer;transition:all .18s;box-shadow:0 2px 12px rgba(26,63,168,.12);}
+#btn:hover{background:#1a3fa8;color:#fff;box-shadow:0 4px 18px rgba(26,63,168,.38);transform:translateY(-1px);}
+#btn.busy{opacity:.55;cursor:wait;pointer-events:none;}
+#toast{display:none;position:fixed;top:18px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#1a3fa8,#2563eb);color:#fff;padding:9px 24px;border-radius:100px;font-family:sans-serif;font-size:.86rem;font-weight:700;box-shadow:0 4px 22px rgba(26,63,168,.4);z-index:999999;white-space:nowrap;}
 </style>
-
-<div id="_cap_toast">✅ Screenshot saved to Downloads!</div>
-<button id="_cap_btn" onclick="_capturePage()">📸 &nbsp;Save Screenshot</button>
-
+<div id="toast">✅ Screenshot saved!</div>
+<button id="btn" onclick="go()">📸 &nbsp;Save Screenshot</button>
 <script>
-function _capturePage() {
-  var btn   = document.getElementById('_cap_btn');
-  var toast = document.getElementById('_cap_toast');
-  btn.classList.add('busy');
-  btn.innerHTML = '⏳ &nbsp;Capturing…';
-
-  // Walk up to the Streamlit root frame and capture it
-  var targetWin = window.parent;
-  var targetDoc = targetWin.document;
-  var targetEl  = targetDoc.getElementById('root') ||
-                  targetDoc.querySelector('.stApp') ||
-                  targetDoc.body;
-
-  // Load html2canvas in parent if not already there
-  if (typeof targetWin.html2canvas === 'undefined') {
-    var s = targetDoc.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-    s.onload = function(){ _doCapture(targetEl, btn, toast); };
-    targetDoc.head.appendChild(s);
-  } else {
-    _doCapture(targetEl, btn, toast);
-  }
-}
-
-function _doCapture(el, btn, toast) {
-  var targetWin = window.parent;
-  targetWin.html2canvas(el, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: '#f0f4ff',
-    logging: false,
-    scrollX: 0,
-    scrollY: -targetWin.scrollY,
-    windowWidth: targetWin.document.documentElement.scrollWidth,
-    windowHeight: targetWin.document.documentElement.scrollHeight
-  }).then(function(canvas){
-    var a = targetWin.document.createElement('a');
-    a.download = 'spamshield-screenshot.png';
-    a.href = canvas.toDataURL('image/png', 1.0);
-    targetWin.document.body.appendChild(a);
-    a.click();
-    targetWin.document.body.removeChild(a);
-
-    btn.classList.remove('busy');
-    btn.innerHTML = '✅ &nbsp;Saved!';
-    toast.style.display = 'block';
-    setTimeout(function(){
-      toast.style.display = 'none';
-      btn.innerHTML = '📸 &nbsp;Save Screenshot';
-    }, 3200);
-  }).catch(function(err){
-    btn.classList.remove('busy');
-    btn.innerHTML = '📸 &nbsp;Save Screenshot';
-    alert('Screenshot failed: ' + err.message);
-  });
+function go(){
+  var b=document.getElementById('btn'),t=document.getElementById('toast');
+  b.classList.add('busy');b.innerHTML='⏳ Capturing…';
+  var tw=window.parent,td=tw.document,el=td.getElementById('root')||td.querySelector('.stApp')||td.body;
+  function run(){tw.html2canvas(el,{scale:2,useCORS:true,allowTaint:true,backgroundColor:'#f0f6ff',logging:false,scrollX:0,scrollY:-tw.scrollY,windowWidth:td.documentElement.scrollWidth,windowHeight:td.documentElement.scrollHeight}).then(function(c){var a=td.createElement('a');a.download='spamshield.png';a.href=c.toDataURL('image/png',1);td.body.appendChild(a);a.click();td.body.removeChild(a);b.classList.remove('busy');b.innerHTML='✅ Saved!';t.style.display='block';setTimeout(function(){t.style.display='none';b.innerHTML='📸 Save Screenshot';},3200);}).catch(function(e){b.classList.remove('busy');b.innerHTML='📸 Save Screenshot';alert('Failed: '+e.message);});}
+  if(typeof tw.html2canvas==='undefined'){var s=td.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';s.onload=run;td.head.appendChild(s);}else{run();}
 }
 </script>
 """, height=58)
 
-# ── FOOTER ────────────────────────────────────────────────────────────
+# ── Footer ────────────────────────────────────────────────────────────
 st.markdown("""
-<div style="text-align:center;color:#b0bcd8;font-size:0.72rem;
-     font-family:'JetBrains Mono',monospace;letter-spacing:0.07em;
-     padding-bottom:1.5rem;margin-top:0.5rem;">
-  SPAMSHIELD AI · POWERED BY GROQ + LLAMA 3.1 · NOT A SUBSTITUTE FOR PROFESSIONAL SECURITY TOOLS
-</div>
-""", unsafe_allow_html=True)
+<div style="text-align:center;color:#94a3b8;font-size:.72rem;font-family:'Fira Code',monospace;letter-spacing:.07em;padding-bottom:1.5rem;margin-top:.5rem;">
+  SPAMSHIELD AI · GROQ + LLAMA 3.1 · NOT A SUBSTITUTE FOR PROFESSIONAL SECURITY TOOLS
+</div>""", unsafe_allow_html=True)
