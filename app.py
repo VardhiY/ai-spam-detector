@@ -431,6 +431,63 @@ div[data-testid="stAlert"] {
     background: var(--rb-primary) !important; color: #fff !important;
 }
 
+/* ── SIDE-BY-SIDE INPUT HEADER ── */
+.sd-input-header {
+    display: flex; align-items: center; gap: 0;
+    margin-bottom: 1rem;
+}
+.sd-input-col-label { flex: 1; }
+.sd-or-pill {
+    flex-shrink: 0;
+    background: linear-gradient(135deg, var(--rb-primary), var(--rb-bright));
+    color: #fff; font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.68rem; font-weight: 900; letter-spacing: 0.12em;
+    padding: 5px 13px; border-radius: 100px;
+    margin: 0 14px;
+    box-shadow: 0 2px 10px rgba(26,63,168,0.3);
+}
+
+/* ── VERTICAL DIVIDER between columns ── */
+[data-testid="column"]:first-child {
+    border-right: 1.5px solid rgba(26,63,168,0.10) !important;
+    padding-right: 1.2rem !important;
+}
+[data-testid="column"]:last-child {
+    padding-left: 1.2rem !important;
+}
+
+/* ── IMAGE PREVIEW ── */
+.sd-img-preview {
+    border-radius: 12px; overflow: hidden;
+    border: 1.5px solid rgba(26,63,168,0.2);
+    box-shadow: 0 4px 18px rgba(26,63,168,0.10);
+    margin-top: 0.4rem;
+    background: #f0f6ff;
+}
+.sd-img-meta {
+    padding: 7px 12px;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.7rem; color: var(--rb-primary); font-weight: 500;
+    background: var(--rb-palest);
+    border-top: 1px solid rgba(26,63,168,0.1);
+}
+
+/* ── IMAGE DROPZONE (empty state) ── */
+.sd-img-dropzone {
+    border: 2px dashed rgba(26,63,168,0.22);
+    border-radius: 14px; padding: 1.8rem 1rem;
+    text-align: center; background: var(--rb-palest);
+    transition: all 0.2s; cursor: pointer;
+    min-height: 200px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    margin-top: 0.4rem;
+}
+.sd-img-dropzone:hover {
+    border-color: var(--rb-primary);
+    background: var(--rb-pale);
+}
+
 /* ── SCREENSHOT BUTTON (inside components.html iframe) ── */
 .sd-screenshot-btn {
     display: inline-flex; align-items: center; gap: 7px;
@@ -590,86 +647,83 @@ st.markdown("""
 
 # ── INPUT CARD ────────────────────────────────────────────────────────
 st.markdown('<div class="sd-input-card">', unsafe_allow_html=True)
-st.markdown('<div class="sd-section-label">Input Source</div>', unsafe_allow_html=True)
 
-# ── Tabs: Text | Image ────────────────────────────────────────────────
-tab_text, tab_image = st.tabs(["📝 Text / Paste", "🖼️ Upload Image"])
+# ── Header row: label + OR divider layout ────────────────────────────
+st.markdown("""
+<div class="sd-input-header">
+  <div class="sd-input-col-label">
+    <span class="sd-section-label">📝 Paste Message</span>
+  </div>
+  <div class="sd-or-pill">OR</div>
+  <div class="sd-input-col-label">
+    <span class="sd-section-label">🖼️ Upload Image</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ── Side-by-side columns ──────────────────────────────────────────────
+col_text, col_img = st.columns([1, 1], gap="medium")
 
 user_input   = ""
 uploaded_img = None
 img_b64      = None
 img_mime     = None
 
-with tab_text:
+with col_text:
+    # Sample quick-fill
     sample_texts = {
         "— Try a sample —": "",
         "🔴 Phishing Email":     "URGENT: Your account has been suspended! Click here immediately to verify your identity and restore access: http://secure-bank-login.xyz/verify?token=abc123. Failure to do so within 24 hours will result in permanent account closure.",
         "🟡 Suspicious Offer":   "Congratulations! You've been selected as today's lucky winner of an iPhone 15 Pro! Just pay a small $2 shipping fee to claim your prize. Visit claimprize.info now before it expires!",
-        "🟢 Legitimate Message": "Hi, just a reminder that our team meeting is scheduled for tomorrow at 10am in Conference Room B. Please review the agenda I shared last week. Let me know if you have questions.",
+        "🟢 Legitimate Message": "Hi, just a reminder that our team meeting is scheduled for tomorrow at 10am in Conference Room B. Please review the agenda I shared last week.",
         "🔴 Scam SMS":           "FREE MSG: Your loan of Rs.50,000 is approved! Call us now at 9988776655 to claim. Limited time offer. Reply STOP to opt out.",
     }
-    col_sample, col_spacer = st.columns([1, 2])
-    with col_sample:
-        selected = st.selectbox("Sample", list(sample_texts.keys()), label_visibility="collapsed")
-
+    selected     = st.selectbox("Sample", list(sample_texts.keys()), label_visibility="collapsed")
     default_text = sample_texts.get(selected, "")
-    user_input = st.text_area(
-        "Message",
-        value=default_text,
-        height=155,
-        placeholder="Paste an email, SMS, social post, or any message here…",
+    user_input   = st.text_area(
+        "Message", value=default_text, height=200,
+        placeholder="Paste an email, SMS, social post, or any suspicious message here…",
         label_visibility="collapsed"
     )
     char_count = len(user_input)
     word_count = len(user_input.split()) if user_input.strip() else 0
     st.markdown(
-        f"<small style='color:#b0bcd8;font-family:JetBrains Mono,monospace;font-size:0.72rem;'>"
+        f"<small style='color:#94a3b8;font-family:Fira Code,monospace;font-size:0.7rem;'>"
         f"{char_count} chars · {word_count} words</small>",
         unsafe_allow_html=True
     )
 
-with tab_image:
-    st.markdown("""
-<div style="font-size:0.82rem;color:#8a9abf;margin-bottom:0.6rem;line-height:1.6;">
-  Upload a <strong>screenshot</strong> of a suspicious message, email, or SMS.
-  The AI will read the text from the image and analyze it for spam.
-</div>""", unsafe_allow_html=True)
-
+with col_img:
     uploaded_img = st.file_uploader(
-        "Upload image",
+        "Upload screenshot",
         type=["png", "jpg", "jpeg", "webp", "gif"],
         label_visibility="collapsed",
         key="img_upload"
     )
 
     if uploaded_img:
-        # Show preview
         img_bytes = uploaded_img.read()
         img_b64   = base64.b64encode(img_bytes).decode()
         img_mime  = uploaded_img.type or "image/png"
-
         st.markdown(f"""
-<div style="margin-top:0.8rem;border-radius:12px;overflow:hidden;
-     border:1.5px solid rgba(26,63,168,0.2);box-shadow:0 4px 16px rgba(26,63,168,0.1);">
+<div class="sd-img-preview">
   <img src="data:{img_mime};base64,{img_b64}"
-       style="width:100%;display:block;max-height:280px;object-fit:contain;background:#f8faff;"/>
-</div>
-<div style="margin-top:0.5rem;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:#b0bcd8;">
-  {uploaded_img.name} · {len(img_bytes)/1024:.1f} KB
+       style="width:100%;display:block;max-height:200px;
+              object-fit:contain;background:#f0f6ff;padding:8px;"/>
+  <div class="sd-img-meta">✅ {uploaded_img.name} · {len(img_bytes)/1024:.1f} KB</div>
 </div>""", unsafe_allow_html=True)
     else:
         st.markdown("""
-<div style="border:2px dashed rgba(26,63,168,0.2);border-radius:14px;
-     padding:2rem;text-align:center;color:#b0bcd8;margin-top:0.5rem;">
-  <div style="font-size:2.2rem;margin-bottom:0.5rem;">🖼️</div>
-  <div style="font-size:0.85rem;font-weight:600;color:#8a9abf;">Drop an image here</div>
-  <div style="font-size:0.76rem;margin-top:4px;">PNG, JPG, JPEG, WEBP, GIF</div>
-  <div style="font-size:0.75rem;margin-top:6px;color:#c0caf0;">
-    Screenshots of spam SMS, phishing emails, scam WhatsApp messages…
+<div class="sd-img-dropzone">
+  <div style="font-size:2rem;margin-bottom:6px;">📸</div>
+  <div style="font-size:0.82rem;font-weight:700;color:#475569;">Drop a screenshot here</div>
+  <div style="font-size:0.74rem;color:#94a3b8;margin-top:4px;line-height:1.5;">
+    PNG · JPG · WEBP · GIF<br>
+    Spam SMS · Phishing emails<br>WhatsApp scams · Notifications
   </div>
 </div>""", unsafe_allow_html=True)
 
-analyze_btn = st.button("🔍 Analyze", use_container_width=True)
+analyze_btn = st.button("🔍  Analyze", use_container_width=True)
 st.markdown('</div>', unsafe_allow_html=True)  # close sd-input-card
 
 # ── ANALYZE FUNCTIONS ─────────────────────────────────────────────────
